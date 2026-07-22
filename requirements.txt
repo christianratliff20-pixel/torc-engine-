@@ -1,0 +1,37 @@
+# Pinned deliberately — pydantic and fastapi versions here are chosen because
+# they have prebuilt wheels for pydantic-core on Python 3.11 across linux/mac/win.
+# Do not bump pydantic past 2.x minor versions without checking
+# https://pypi.org/project/pydantic-core/#files for wheel coverage on your
+# target deploy platform's Python version FIRST. This is the exact failure
+# mode that stalled Sharp Edge's deploy.
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+pydantic-settings==2.3.4
+sqlalchemy==2.0.31
+psycopg2-binary==2.9.9
+alembic==1.13.2
+celery==5.4.0
+redis==5.0.7
+python-multipart==0.0.9
+python-dotenv==1.0.1
+email-validator==2.2.0
+
+# Pipeline dependencies — heavier, add as each Tier 0 stage is actually built
+# rather than installing everything up front:
+# faster-whisper==1.0.3       # transcription
+# yt-dlp==2024.7.1            # link-based ingestion (YouTube/Twitch/TikTok/etc)
+# pyannote.audio==3.3.1       # speaker diarization
+# scenedetect==0.6.4          # scene-cut detection for reframing
+
+# Auth — self-hosted JWT, no external vendor account needed to start.
+# Swappable for Clerk/Supabase later without touching the rest of the app,
+# since every route just depends on get_current_user in app/auth.py.
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Billing
+stripe==10.1.0
+
+# Rate limiting — reuses the Redis already required for Celery

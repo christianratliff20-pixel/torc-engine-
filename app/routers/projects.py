@@ -1,112 +1,92 @@
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
+from ..dependencies import get_db, get_current_user
+from ..models import Project, Highlight, User
+from ..tasks import process_video_pipeline, run_detection_pass_two
 import uuid
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from sqlalchemy.orm import Session
+router = APIRouter(prefix="/api/projects", tags=["projects"])
 
-from app.database import get_db
-from app import models, schemas, auth as auth_utils
+# Helper function to calculate limits based on Stripe plan
+def get_max_redos_for_tier(plan_name: str) -> int:
+    plan = plan_name.lower() if plan_name else "free"
+    if plan == "free":
+        return 3
+    elif plan == "starter":
+        return 6
+    elif plan == "pro":
+        return 9
+    elif plan == "studio":
+        return 12
+    return 3 # Default fallback
 
-router = APIRouter()
-
-
-@router.get("", response_model=list[schemas.ProjectOut])
-def list_projects(
-    current_user: models.User = Depends(auth_utils.get_current_user),
-    db: Session = Depends(get_db),
-):
-    return (
-        db.query(models.Project)
-        .filter(models.Project.owner_id == current_user.id)
-        .order_by(models.Project.created_at.desc())
-        .all()
-    )
-
-
-def _get_owned_project(project_id: uuid.UUID, current_user: models.User, db: Session) -> models.Project:
-    project = (
-        db.query(models.Project)
-        .filter(models.Project.id == project_id, models.Project.owner_id == current_user.id)
-        .first()
-    )
-    if not project:
-        raise HTTPException(404, "Project not found")
-    return project
-
-
-@router.get("/{project_id}", response_model=schemas.ProjectOut)
-def get_project(
-    project_id: uuid.UUID,
-    current_user: models.User = Depends(auth_utils.get_current_user),
-    db: Session = Depends(get_db),
-):
-    return _get_owned_project(project_id, current_user, db)
-
-
-@router.get("/{project_id}/status", response_model=schemas.ProjectOut)
-def get_project_status(
-    project_id: uuid.UUID,
-    current_user: models.User = Depends(auth_utils.get_current_user),
-    db: Session = Depends(get_db),
-):
-    return _get_owned_project(project_id, current_user, db)
-
-
-@router.get("/{project_id}/highlights", response_model=list[schemas.HighlightOut])
-def get_highlights(
-    project_id: uuid.UUID,
-    current_user: models.User = Depends(auth_utils.get_current_user),
-    db: Session = Depends(get_db),
-):
-    _get_owned_project(project_id, current_user, db)
-    return (
-        db.query(models.Highlight)
-        .filter(models.Highlight.project_id == project_id)
-        .order_by(models.Highlight.start_seconds)
-        .all()
-    )
-
-
-@router.post("/upload", response_model=schemas.ProjectOut)
-def upload_project(
+@router.post("/upload")
+async def upload_video(
     file: UploadFile = File(...),
-    user_instruction: str = Form(None),
-    current_user: models.User = Depends(auth_utils.get_current_user),
+    instructions: str = Form(None),
+    preset: str = Form("auto"),
+    clip_count: str = Form("auto"),
     db: Session = Depends(get_db),
+    user = Depends(get_current_user)
 ):
-    project = models.Project(
-        owner_id=current_user.id,
+    project_id = f"proj-{uuid.uuid4().hex[:8]}"
+    
+    # Read the file and save it to the local /tmp disk so FFmpeg and Deepgram can find it
+    video_path = f"/tmp/{project_id}.mp4"
+    with open(video_path, "wb") as buffer:
+        buffer.write(await file.read())
+    
+    new_project = Project(
+        id=project_id,
+        user_id=user.id,
         name=file.filename,
-        source_type=models.SourceType.upload,
-        file_path=f"/data/uploads/{current_user.id}/{file.filename}",
-        status=models.ProjectStatus.draft,
-        user_instruction=user_instruction,
+        source_type="file",
+        status="transcribing",
+        instructions=instructions,
+        preset=preset,
+        clip_count=clip_count,
+        redos_used=0
     )
-    db.add(project)
+    db.add(new_project)
     db.commit()
-    db.refresh(project)
+    
+    # Kick off the full pipeline (Transcribe -> Pass 1 -> Pass 2)
+    process_video_pipeline.delay(project_id)
+    return new_project
 
-    return project
+class ReDetectRequest(BaseModel):
+    instructions: str
+    preset: str
+    clip_count: str
 
+@router.post("/{project_id}/re-detect")
+def re_detect_project(project_id: str, req: ReDetectRequest, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-@router.post("/ingest", response_model=schemas.ProjectOut)
-def ingest_project(
-    payload: schemas.ProjectCreateFromLink,
-    current_user: models.User = Depends(auth_utils.get_current_user),
-    db: Session = Depends(get_db),
-):
-    if payload.platform not in models.SourceType.__members__:
-        raise HTTPException(400, f"Unsupported platform: {payload.platform}")
+    # STRICT TIER LIMIT CHECK
+    max_redos = get_max_redos_for_tier(user.plan)
+    if project.redos_used >= max_redos:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Redo limit reached. Your {user.plan.capitalize()} tier allows {max_redos} refetches per project."
+        )
 
-    project = models.Project(
-        owner_id=current_user.id,
-        name=payload.url,
-        source_type=models.SourceType[payload.platform],
-        source_url=payload.url,
-        status=models.ProjectStatus.fetching,
-        user_instruction=payload.user_instruction,
-    )
-    db.add(project)
+    # Update project with new steering instructions
+    project.instructions = req.instructions
+    project.preset = req.preset
+    project.clip_count = req.clip_count
+    project.redos_used += 1
+    project.status = "detecting"
+    
+    # Wipe old highlights that haven't been queued for export
+    db.query(Highlight).filter(Highlight.project_id == project_id).delete()
     db.commit()
-    db.refresh(project)
+
+    # Fire celery task for Pass 2 ONLY (skips transcription & Pass 1)
+    run_detection_pass_two.delay(project.id)
 
     return project

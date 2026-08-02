@@ -38,4 +38,3 @@ def rate_limit(key_prefix: str, max_attempts: int, window_seconds: int):
 login_rate_limit = rate_limit("login", max_attempts=10, window_seconds=300)
 register_rate_limit = rate_limit("register", max_attempts=5, window_seconds=3600)
 forgot_password_rate_limit = rate_limit("forgot_password", max_attempts=3, window_seconds=900)
-tt

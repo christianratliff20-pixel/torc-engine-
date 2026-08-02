@@ -4,15 +4,12 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid
 
-# Force the import from the specific module
-import app.auth
 from app.database import get_db
+from app.auth import get_current_user
 from app.tasks import process_video_pipeline, run_detection_pass_two
+from app.models import Project, Highlight
 
-# Now reference it using the explicit module name
-get_current_user = app.auth.get_current_user
 router = APIRouter(prefix="/api/projects", tags=["projects"])
-
 # Helper function to calculate limits based on Stripe plan
 def get_max_redos_for_tier(plan_name: str) -> int:
     plan = plan_name.lower() if plan_name else "free"

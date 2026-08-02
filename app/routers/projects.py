@@ -12,7 +12,6 @@ from app.config import settings
 from app.database import get_db
 from app import models
 
-# Initialize Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 

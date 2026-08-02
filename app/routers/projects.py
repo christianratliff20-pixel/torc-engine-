@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-from ..dependencies import get_db, get_current_user
 from ..models import Project, Highlight, User
 from ..tasks import process_video_pipeline, run_detection_pass_two
 import uuid

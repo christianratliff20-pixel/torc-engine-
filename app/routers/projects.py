@@ -2,11 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-from app.database import get_db
-from ..models import Project, Highlight, User
-from ..tasks import process_video_pipeline, run_detection_pass_two
 import uuid
 
+# Force the import from the specific module
+import app.auth
+from app.database import get_db
+from app.tasks import process_video_pipeline, run_detection_pass_two
+
+# Now reference it using the explicit module name
+get_current_user = app.auth.get_current_user
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 # Helper function to calculate limits based on Stripe plan

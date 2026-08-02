@@ -1,16 +1,13 @@
-import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from app.routers.auth import get_current_user
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
+import uuid
 
-from app.config import settings
+# These are the absolute imports
 from app.database import get_db
-from app import models
-
+from app.auth import get_current_user
+from app.tasks import process_video_pipeline, run_detection_pass_two
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 

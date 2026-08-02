@@ -8,7 +8,10 @@ from app import models
 
 # Lazy load the authentication dependency to avoid circular imports
 def get_current_user_lazy():
-    from app.auth import get_current_user
+from app.deps import get_current_user
+
+# In your route definitions:
+user = Depends(get_current_user)
     return get_current_user
 
 router = APIRouter(prefix="/api/clips", tags=["clips"])

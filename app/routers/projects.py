@@ -8,7 +8,13 @@ from app.database import get_db
 from app.tasks import process_video_pipeline, run_detection_pass_two
 from app.models import Project, Highlight
 
+# Lazy load the authentication dependency to break circular import loops
+def get_current_user_lazy():
+    from app.auth import get_current_user
+    return get_current_user
+
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
 # Helper function to calculate limits based on Stripe plan
 def get_max_redos_for_tier(plan_name: str) -> int:
     plan = plan_name.lower() if plan_name else "free"
@@ -29,7 +35,7 @@ async def upload_video(
     preset: str = Form("auto"),
     clip_count: str = Form("auto"),
     db: Session = Depends(get_db),
-    user = Depends(get_current_user)
+    user = Depends(get_current_user_lazy())
 ):
     project_id = f"proj-{uuid.uuid4().hex[:8]}"
     
@@ -62,7 +68,12 @@ class ReDetectRequest(BaseModel):
     clip_count: str
 
 @router.post("/{project_id}/re-detect")
-def re_detect_project(project_id: str, req: ReDetectRequest, db: Session = Depends(get_db), user = Depends(get_current_user)):
+def re_detect_project(
+    project_id: str, 
+    req: ReDetectRequest, 
+    db: Session = Depends(get_db), 
+    user = Depends(get_current_user_lazy())
+):
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

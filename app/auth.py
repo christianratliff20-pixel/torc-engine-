@@ -1,12 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-# If your auth snippet is saved in app/auth.py:
-from app.auth import get_current_user
-
-# OR if your auth snippet is saved in app/routers/auth.py:
 from app.routers.auth import get_current_user
-from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext

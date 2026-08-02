@@ -1,47 +1,58 @@
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
+from typing import List, Optional
+import uuid
 
 from app.database import get_db
 from app import models, schemas
 
-router = APIRouter()
+# Lazy load the authentication dependency to avoid circular imports
+def get_current_user_lazy():
+    from app.auth import get_current_user
+    return get_current_user
 
+router = APIRouter(prefix="/api/clips", tags=["clips"])
 
-@router.get("/queue", response_model=list[schemas.ClipOut])
-def get_queue(
-    current_user: models.User = Depends(auth_utils.get_current_user),
+@router.get("/", response_model=List[schemas.ClipResponse])
+def get_clips(
+    project_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user_lazy())
 ):
-    return (
-        db.query(models.Clip)
-        .join(models.Highlight, models.Clip.highlight_id == models.Highlight.id)
-        .join(models.Project, models.Highlight.project_id == models.Project.id)
-        .filter(models.Project.owner_id == current_user.id)
-        .order_by(models.Clip.created_at.desc())
-        .all()
-    )
+    query = db.query(models.Clip).join(models.Project).filter(models.Project.user_id == current_user.id)
+    if project_id:
+        query = query.filter(models.Clip.project_id == project_id)
+    return query.all()
 
-
-@router.post("/{highlight_id}/queue", response_model=schemas.ClipOut)
-def queue_clip(
-    highlight_id: uuid.UUID,
-    current_user: models.User = Depends(auth_utils.get_current_user),
+@router.get("/{clip_id}", response_model=schemas.ClipResponse)
+def get_clip(
+    clip_id: str,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user_lazy())
 ):
-    highlight = (
-        db.query(models.Highlight)
-        .join(models.Project, models.Highlight.project_id == models.Project.id)
-        .filter(models.Highlight.id == highlight_id, models.Project.owner_id == current_user.id)
-        .first()
-    )
-    if not highlight:
-        raise HTTPException(404, "Highlight not found")
-
-    clip = models.Clip(highlight_id=highlight.id, status=models.ClipStatus.queued)
-    db.add(clip)
-    db.commit()
-    db.refresh(clip)
-
+    clip = db.query(models.Clip).join(models.Project).filter(
+        models.Clip.id == clip_id,
+        models.Project.user_id == current_user.id
+    ).first()
+    
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
     return clip
+
+@router.delete("/{clip_id}")
+def delete_clip(
+    clip_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user_lazy())
+):
+    clip = db.query(models.Clip).join(models.Project).filter(
+        models.Clip.id == clip_id,
+        models.Project.user_id == current_user.id
+    ).first()
+    
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+        
+    db.delete(clip)
+    db.commit()
+    return {"status": "success", "message": "Clip deleted successfully"}

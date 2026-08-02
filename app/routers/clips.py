@@ -4,7 +4,7 @@ from typing import List, Optional
 import uuid
 
 from app.database import get_db
-from app import models, schemas
+from app import models
 
 # Lazy load the authentication dependency to avoid circular imports
 def get_current_user_lazy():
@@ -13,7 +13,7 @@ def get_current_user_lazy():
 
 router = APIRouter(prefix="/api/clips", tags=["clips"])
 
-@router.get("/", response_model=List[schemas.ClipResponse])
+@router.get("/")
 def get_clips(
     project_id: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -24,7 +24,7 @@ def get_clips(
         query = query.filter(models.Clip.project_id == project_id)
     return query.all()
 
-@router.get("/{clip_id}", response_model=schemas.ClipResponse)
+@router.get("/{clip_id}")
 def get_clip(
     clip_id: str,
     db: Session = Depends(get_db),

@@ -5,7 +5,6 @@ from typing import Optional
 import uuid
 
 from app.database import get_db
-from app.auth import get_current_user
 from app.tasks import process_video_pipeline, run_detection_pass_two
 from app.models import Project, Highlight
 

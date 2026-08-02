@@ -6,7 +6,6 @@ import uuid
 
 # These are the absolute imports
 from app.database import get_db
-from app.auth import get_current_user
 from app.tasks import process_video_pipeline, run_detection_pass_two
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")

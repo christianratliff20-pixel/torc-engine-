@@ -17,7 +17,7 @@ redis==5.0.7
 python-multipart==0.0.9
 python-dotenv==1.0.1
 email-validator==2.2.0
-anthrophic==3.2.7
+anthropic==3.2.7
 yt-dlp==2024.07.25
 
 # Pipeline dependencies — heavier, add as each Tier 0 stage is actually built

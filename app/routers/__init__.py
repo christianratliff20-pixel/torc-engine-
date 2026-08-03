@@ -1,3 +1,2 @@
-from . import auth, projects, presets
-
-__all__ = ["auth", "projects", "presets"]
+# Routers package initialization file
+# Keeping this file free of top-level router imports prevents circular dependency locks during boot.

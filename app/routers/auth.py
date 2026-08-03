@@ -27,6 +27,7 @@ class TokenResponse(BaseModel):
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register_user(req: UserRegister, db: Session = Depends(get_db)):
+    """Register a new user account with hashed password."""
     clean_email = req.email.lower().strip()
     existing_user = db.query(User).filter(User.email == clean_email).first()
     if existing_user:
@@ -57,6 +58,7 @@ def register_user(req: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login_user(req: UserLogin, db: Session = Depends(get_db)):
+    """Authenticate existing user credentials and issue JWT access token."""
     clean_email = req.email.lower().strip()
     user = db.query(User).filter(User.email == clean_email).first()
     if not user or not verify_password(req.password, user.hashed_password):
@@ -76,6 +78,7 @@ def login_user(req: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me")
 def get_me(user: User = Depends(get_current_user)):
+    """Return profile details for the currently authenticated user."""
     return {
         "id": user.id,
         "email": user.email,

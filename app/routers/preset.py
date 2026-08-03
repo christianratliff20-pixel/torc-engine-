@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List
 import uuid
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import CustomPreset
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/api/presets", tags=["presets"])
+router = APIRouter(tags=["presets"])
 
 class PresetCreate(BaseModel):
     name: str

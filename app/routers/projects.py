@@ -74,7 +74,7 @@ def get_project_details(
 ):
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
     return project
 
 @router.get("/{project_id}/status", response_model=ProjectOut)
@@ -85,7 +85,7 @@ def get_project_status(
 ):
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
     return project
 
 @router.get("/{project_id}/highlights", response_model=List[HighlightOut])
@@ -94,9 +94,9 @@ def get_project_highlights(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
+    project = db.query(Project).filter(Project.id == project_id, User.id == user.id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
     return db.query(Highlight).filter(Highlight.project_id == project_id).order_by(Highlight.start_seconds.asc()).all()
 
 @router.post("/upload", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
@@ -142,12 +142,12 @@ def re_detect_project(
 ):
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found.")
 
     max_redos = get_max_redos_for_tier(user.plan)
     if project.redos_used >= max_redos:
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Redo limit reached. Your {user.plan.capitalize()} tier allows {max_redos} re-detections per project."
         )
 

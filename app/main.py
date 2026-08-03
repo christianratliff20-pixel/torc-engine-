@@ -2,8 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.routers import projects, auth, presets
+from app.routers.auth import router as auth_router
+from app.routers.projects import router as projects_router
+from app.routers.presets import router as presets_router
 
+# Auto-create missing database tables on boot
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -12,6 +15,7 @@ app = FastAPI(
     description="Production API for TORC AI Video Clipping Engine"
 )
 
+# Enable CORS for frontend clients
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,9 +24,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth")
-app.include_router(projects.router, prefix="/api/projects")
-app.include_router(presets.router, prefix="/api/presets")
+# Register route modules directly to avoid circular import issues
+app.include_router(auth_router, prefix="/api/auth")
+app.include_router(projects_router, prefix="/api/projects")
+app.include_router(presets_router, prefix="/api/presets")
 
 @app.get("/")
 def health_check():

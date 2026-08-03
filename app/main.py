@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers.auth import router as auth_router
 from app.routers.projects import router as projects_router
-from app.routers.presets import router as presets_router
+from .routers.presets import router as presets_router
 
 # Auto-create missing database tables on boot
 Base.metadata.create_all(bind=engine)

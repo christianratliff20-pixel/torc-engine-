@@ -66,3 +66,14 @@ class Highlight(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     project = relationship("Project", back_populates="highlights")
+
+
+class Clip(Base):
+    __tablename__ = "clips"
+
+    id = Column(String, primary_key=True, default=lambda: f"clip-{uuid.uuid4().hex[:8]}")
+    highlight_id = Column(String, ForeignKey("highlights.id"), nullable=True)
+    status = Column(String, default="pending")  # 'pending', 'rendering', 'rendered', 'failed'
+    error_message = Column(Text, nullable=True)
+    output_path = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

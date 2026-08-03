@@ -20,7 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Note: Central prefixes here ensure clean endpoint URLs without duplicate /api/auth paths
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(projects.router, prefix="/api/projects")
 app.include_router(presets.router, prefix="/api/presets")

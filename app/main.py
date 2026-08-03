@@ -1,26 +1,34 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
-from app.routers import projects, clips, auth, platforms, billing
+from app.database import engine, Base
+from app.routers import projects, auth, presets
 
-app = FastAPI(title="Clipping Engine API")
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="TORC AI Clipping Engine API",
+    version="1.0.0",
+    description="Production API for TORC AI Video Clipping Engine"
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(","),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(clips.router, prefix="/api/clips", tags=["clips"])
-app.include_router(platforms.router, prefix="/api/platforms", tags=["platforms"])
-app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
+# Note: Central prefixes here ensure clean endpoint URLs without duplicate /api/auth paths
+app.include_router(auth.router, prefix="/api/auth")
+app.include_router(projects.router, prefix="/api/projects")
+app.include_router(presets.router, prefix="/api/presets")
 
-
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
+@app.get("/")
+def health_check():
+    return {
+        "status": "online",
+        "service": "TORC AI Backend Engine",
+        "version": "1.0.0"
+    }

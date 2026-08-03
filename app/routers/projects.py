@@ -1,95 +1,64 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 import uuid
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.tasks import process_video_pipeline, run_detection_pass_two
-from app.models import Project, Highlight
+from app.models import CustomPreset
+from app.deps import get_current_user
 
-# Lazy load the authentication dependency to prevent circular import loops
-def get_current_user_lazy():
-    from app.auth import get_current_user
-    return get_current_user
+router = APIRouter(tags=["presets"])
 
-router = APIRouter(prefix="/api/projects", tags=["projects"])
+class PresetCreate(BaseModel):
+    name: str
+    prompt: str
 
-def get_max_redos_for_tier(plan_name: str) -> int:
-    plan = plan_name.lower() if plan_name else "free"
-    if plan == "free":
-        return 3
-    elif plan == "starter":
-        return 6
-    elif plan == "pro":
-        return 9
-    elif plan == "studio":
-        return 12
-    return 3
+class PresetOut(BaseModel):
+    id: str
+    name: str
+    prompt: str
 
-@router.post("/upload")
-async def upload_video(
-    file: UploadFile = File(...),
-    instructions: str = Form(None),
-    preset: str = Form("auto"),
-    clip_count: str = Form("auto"),
+    class Config:
+        from_attributes = True
+
+@router.get("/", response_model=List[PresetOut])
+def get_user_presets(
     db: Session = Depends(get_db),
-    user = Depends(get_current_user_lazy())
+    user = Depends(get_current_user)
 ):
-    project_id = f"proj-{uuid.uuid4().hex[:8]}"
-    
-    video_path = f"/tmp/{project_id}.mp4"
-    with open(video_path, "wb") as buffer:
-        buffer.write(await file.read())
-    
-    new_project = Project(
-        id=project_id,
+    return db.query(CustomPreset).filter(CustomPreset.user_id == user.id).all()
+
+@router.post("/", response_model=PresetOut, status_code=status.HTTP_201_CREATED)
+def create_custom_preset(
+    req: PresetCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    if not req.name.strip() or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="Preset name and prompt directive cannot be empty.")
+
+    new_preset = CustomPreset(
+        id=f"cp-{uuid.uuid4().hex[:8]}",
         user_id=user.id,
-        name=file.filename,
-        source_type="file",
-        status="transcribing",
-        instructions=instructions,
-        preset=preset,
-        clip_count=clip_count,
-        redos_used=0
+        name=req.name.strip(),
+        prompt=req.prompt.strip()
     )
-    db.add(new_project)
+    db.add(new_preset)
     db.commit()
-    
-    process_video_pipeline.delay(project_id)
-    return new_project
+    db.refresh(new_preset)
+    return new_preset
 
-class ReDetectRequest(BaseModel):
-    instructions: str
-    preset: str
-    clip_count: str
-
-@router.post("/{project_id}/re-detect")
-def re_detect_project(
-    project_id: str, 
-    req: ReDetectRequest, 
-    db: Session = Depends(get_db), 
-    user = Depends(get_current_user_lazy())
+@router.delete("/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_custom_preset(
+    preset_id: str,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
 ):
-    project = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    preset = db.query(CustomPreset).filter(CustomPreset.id == preset_id, CustomPreset.user_id == user.id).first()
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found.")
 
-    max_redos = get_max_redos_for_tier(user.plan)
-    if project.redos_used >= max_redos:
-        raise HTTPException(
-            status_code=403, 
-            detail=f"Redo limit reached. Your {user.plan.capitalize()} tier allows {max_redos} refetches per project."
-        )
-
-    project.instructions = req.instructions
-    project.preset = req.preset
-    project.clip_count = req.clip_count
-    project.redos_used += 1
-    project.status = "detecting"
-    
-    db.query(Highlight).filter(Highlight.project_id == project_id).delete()
+    db.delete(preset)
     db.commit()
-
-    run_detection_pass_two.delay(project.id)
-
-    return project
+    return None
